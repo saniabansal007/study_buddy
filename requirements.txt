@@ -1,0 +1,30 @@
+# Web framework
+streamlit
+
+# Environment variables
+python-dotenv
+
+# LangChain core
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+
+# LLM — Hugging Face
+langchain-huggingface
+huggingface-hub
+
+# Vector store
+langchain-chroma
+chromadb
+
+# Embeddings model (all-MiniLM-L6-v2)
+sentence-transformers
+
+# File readers
+pypdf
+python-pptx
+unstructured
+
+# Graph layout
+networkx
