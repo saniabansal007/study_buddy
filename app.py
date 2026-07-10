@@ -1,6 +1,7 @@
 import os, uuid
 import streamlit as st
 from utils import ok_file, read_file, chunk, MAX_BYTES, UPLOAD_DIR
+from summarizer import page_summarizer
 
 # initialise session state variables
 # Without session_state, these values would reset every time Streamlit reruns the script.
@@ -118,8 +119,9 @@ def main():
         st.write("Upload your notes — PDF, PPTX, or TXT — using the sidebar to get started.")
         return
 
-    st.title("File loaded!")
-
+    page= st.session_state.page
+    if page == "summarizer":
+        page_summarizer(doc, doc_id)
 
 if __name__ == "__main__":
     main()
