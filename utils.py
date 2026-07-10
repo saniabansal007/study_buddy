@@ -5,7 +5,7 @@ from pptx import Presentation
 # Constants
 BASE_DIR   = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-CHUNK_SIZE= 400
+CHUNK_SZ= 400
 OVERLAP= 80
 MAX_BYTES = 20 * 1024 * 1024   # 20 MB
 MAX_CHARS = 10_000
@@ -43,9 +43,9 @@ def read_file(path: str, ext: str)->str:
 def chunk(text: str)->list[str]:
     chunks, start= [], 0
     while start<len(text):
-        end= start+ CHUNK_SIZE
+        end= start+ CHUNK_SZ
         chunks.append(text[start:end])
-        start+= CHUNK_SIZE- OVERLAP
+        start+= CHUNK_SZ- OVERLAP
 
     #using c.strip() discards the empty strings 
     return [c for c in chunks if c.strip()]
