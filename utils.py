@@ -1,4 +1,4 @@
-import os
+import os, re, json
 import pypdf
 from pptx import Presentation
 
@@ -89,8 +89,34 @@ def run_prompt(prompt_template: ChatPromptTemplate, variables: dict, max_tokens:
     return chat_llm.invoke(lc_msgs).content
 
 
-SUMMARIZE_PROMPT = ChatPromptTemplate.from_messages([
+SUMMARIZE_PROMPT= ChatPromptTemplate.from_messages([
     ("human",
      "Summarize the material below in {instr}. Use short headings and bullet points.\n\n"
+     "MATERIAL:\n{text}")
+])
+
+def parse_json(raw: str):
+    #Strip markdown fences the LLM wraps around JSON, then parse it.
+    #Falls back to regex extraction if direct parsing fails.
+    
+    cleaned= re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        for pat in [r"\[[\s\S]*\]", r"\{[\s\S]*\}"]:
+            m = re.search(pat, cleaned)
+            if m:
+                try:
+                    return json.loads(m.group(0))
+                except:
+                    pass
+        raise
+
+
+QUIZ_PROMPT= ChatPromptTemplate.from_messages([
+    ("human",
+     "Create {n} multiple-choice questions at {difficulty} difficulty.\n\n"
+     "Return ONLY valid JSON:\n"
+     '[{{"question":"...","topic":"...","options":["A","B","C","D"],"correct_index":0,"explanation":"..."}}]\n\n'
      "MATERIAL:\n{text}")
 ])
