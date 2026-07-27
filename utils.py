@@ -8,13 +8,20 @@ from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+
 from datetime import datetime, timedelta
+import logging
+logger = logging.getLogger("study_buddy")
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 
 # Constants
 BASE_DIR   = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+CHROMA_DIR = os.path.join(BASE_DIR, "chroma_db")
 CHUNK_SZ= 400
 OVERLAP= 80
 MAX_BYTES = 20 * 1024 * 1024   # 20 MB
@@ -163,3 +170,100 @@ FLASHCARD_PROMPT= ChatPromptTemplate.from_messages([
      '[{{"front":"question","back":"detailed answer","topic":"topic name"}}]\n\n'
      "MATERIAL:\n{text}")
 ])
+
+
+# CHAT FEATURE
+
+@st.cache_resource
+def load_embeddings():
+    try:
+        emb = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        return emb, True
+    except Exception as e:
+        logger.warning("Embeddings init failed: %s", e)
+        return None, False
+
+
+# module-level dict: doc_id → Chroma store instance
+_chroma_stores: dict = {}
+
+
+def _ensure_indexed(doc_id: str, chunks: list[str]):
+    """Build the Chroma index for a document if it doesn't exist yet."""
+    embeddings, RAG = load_embeddings()
+    if not RAG or not chunks or doc_id in _chroma_stores:
+        return
+    try:
+        store = Chroma.from_texts(
+            texts=chunks,
+            embedding=embeddings,
+            collection_name=doc_id,
+            persist_directory=os.path.join(CHROMA_DIR, doc_id),
+        )
+        _chroma_stores[doc_id] = store
+        logger.info("Indexed %d chunks for %s", len(chunks), doc_id)
+    except Exception as e:
+        logger.error("_ensure_indexed: %s", e)
+
+
+def retrieve(doc_id: str, query: str, k: int = 4) -> list[str]:
+    """Return top-k relevant chunks for a query."""
+    embeddings, RAG = load_embeddings()
+    if not RAG:
+        return []
+    chunks = st.session_state.get("documents", {}).get(doc_id, {}).get("chunks", [])
+    _ensure_indexed(doc_id, chunks)
+    try:
+        store = _chroma_stores.get(doc_id)
+        if not store:
+            return []
+        return [d.page_content for d in store.similarity_search(query, k=k)]
+    except Exception as e:
+        logger.error("retrieve: %s", e)
+        return []
+
+def llm_invoke(messages: list, max_tokens: int = 1500) -> str:
+    """Invoke the LLM with a plain list of dicts {role, content}."""
+    chat_llm = load_llm()
+    if chat_llm is None:
+        raise RuntimeError("HF_TOKEN not set or LLM failed to initialise.")
+    lc_messages = []
+    for m in messages:
+        role, content = m.get("role"), m.get("content", "")
+        if role == "system":
+            lc_messages.append(SystemMessage(content=content))
+        else:
+            lc_messages.append(HumanMessage(content=content))
+    return chat_llm.invoke(lc_messages).content
+
+
+def rag_answer(doc_id: str, question: str, fallback_text: str) -> tuple[str, list[str]]:
+    _, rag_ready = load_embeddings()
+    chunks = st.session_state.get("documents", {}).get(doc_id, {}).get("chunks", [])
+    if rag_ready:
+        _ensure_indexed(doc_id, chunks)
+    if rag_ready and doc_id in _chroma_stores:
+        try:
+            sources = _chroma_stores[doc_id].similarity_search(question, k=4)
+            context = "\n\n".join(d.page_content for d in sources)
+            answer  = llm_invoke([{"role": "user", "content":
+                f"Answer using ONLY the context below. Say if not in context.\n\n"
+                f"CONTEXT:\n{context}\n\nQUESTION: {question}"}], max_tokens=800)
+            return answer, [d.page_content for d in sources[:2]]
+        except Exception as e:
+            logger.error("rag_answer: %s", e)
+
+    # fallback
+    ctx = fallback_text[:MAX_CHARS]
+    answer = llm_invoke([{"role": "user", "content":
+        f"Answer using ONLY the context below. Say if not in context.\n\n"
+        f"CONTEXT:\n{ctx}\n\nQUESTION: {question}"}], max_tokens=800)
+    return answer, [ctx[:500]]
+
+
+
+
+SOCRATIC_SYSTEM = (
+    "You are a Socratic tutor. Ask guiding questions only- never give direct answers. "
+    "One question at a time. Use this context:\n\n{context}"
+)
