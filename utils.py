@@ -8,6 +8,8 @@ from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
+from datetime import datetime, timedelta
+
 load_dotenv()
 
 # Constants
@@ -98,7 +100,7 @@ SUMMARIZE_PROMPT= ChatPromptTemplate.from_messages([
 def parse_json(raw: str):
     #Strip markdown fences the LLM wraps around JSON, then parse it.
     #Falls back to regex extraction if direct parsing fails.
-    
+
     cleaned= re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
     try:
         return json.loads(cleaned)
@@ -118,5 +120,46 @@ QUIZ_PROMPT= ChatPromptTemplate.from_messages([
      "Create {n} multiple-choice questions at {difficulty} difficulty.\n\n"
      "Return ONLY valid JSON:\n"
      '[{{"question":"...","topic":"...","options":["A","B","C","D"],"correct_index":0,"explanation":"..."}}]\n\n'
+     "MATERIAL:\n{text}")
+])
+
+
+def sm2(card: dict, q: int) -> dict:
+    """
+    SM-2 spaced repetition algorithm.
+    q = quality of recall:
+        0 = Again (complete blank)
+        3 = Hard  (correct but difficult)
+        4 = Good  (correct with some effort)
+        5 = Easy  (perfect recall)
+    """
+    q = max(0, min(5, q))          # clamp to valid range
+    if q >= 3:                     # correct answer
+        rep = card["repetitions"]
+        if   rep == 0: iv = 1      # first time correct: review tomorrow
+        elif rep == 1: iv = 6      # second time: review in 6 days
+        else:          iv = round(card["interval"] * card["ease_factor"])
+        card["repetitions"] += 1
+    else:                          # wrong answer: reset
+        card["repetitions"] = 0
+        iv = 1
+    ef= card["ease_factor"] + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+    card["ease_factor"] = round(max(1.3, ef), 3)   # never drop below 1.3
+    card["interval"]    = iv
+    card["next_review"] = (datetime.now() + timedelta(days=iv)).isoformat()
+    card["history"].append({
+        "quality":  q,
+        "correct":  q >= 3,
+        "interval": iv,
+        "ts":       datetime.now().isoformat(),
+    })
+    return card
+
+
+FLASHCARD_PROMPT= ChatPromptTemplate.from_messages([
+    ("human",
+     "Create {n} flashcard Q&A pairs from the material.\n\n"
+     "Return ONLY valid JSON:\n"
+     '[{{"front":"question","back":"detailed answer","topic":"topic name"}}]\n\n'
      "MATERIAL:\n{text}")
 ])

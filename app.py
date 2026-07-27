@@ -3,6 +3,7 @@ import streamlit as st
 from utils import ok_file, read_file, chunk, MAX_BYTES, UPLOAD_DIR
 from summarizer import page_summarizer
 from quiz import page_quiz
+from flashcards import page_flashcards
 
 # initialise session state variables
 # Without session_state, these values would reset every time Streamlit reruns the script.
@@ -123,6 +124,7 @@ def main():
     page = st.session_state.page
     if   page == "summarizer": page_summarizer(doc, doc_id)
     elif page == "quiz":       page_quiz(doc, doc_id)
+    elif page == "flashcards": page_flashcards(doc, doc_id)
     else:
         st.info(f"'{page}' page coming in a future step.")
 
