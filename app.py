@@ -5,6 +5,7 @@ from summarizer import page_summarizer
 from quiz import page_quiz
 from flashcards import page_flashcards
 from chat import page_qna, page_socratic
+from analytics import page_graph, page_analytics
 
 # initialise session state variables
 # Without session_state, these values would reset every time Streamlit reruns the script.
@@ -25,49 +26,49 @@ def get_doc():
 
 
 def _handle_upload(uploaded):
-    name= uploaded.name
+    name = uploaded.name
     if not ok_file(name):
         st.error("Unsupported file type. Please upload PDF, PPTX, or TXT.")
         return
-    if uploaded.size> MAX_BYTES:
+    if uploaded.size > MAX_BYTES:
         st.error("File too large- maximum is 20 MB.")
         return
 
-    ext= name.rsplit(".", 1)[1].lower()
-    did= uuid.uuid4().hex #a unique id is created, so 2 files with same name won't collide
-    path= os.path.join(UPLOAD_DIR, f"{did}_{name}")
+    ext = name.rsplit(".", 1)[1].lower()
+    did = uuid.uuid4().hex
+    path = os.path.join(UPLOAD_DIR, f"{did}_{name}")
 
     with open(path, "wb") as f:
         f.write(uploaded.getvalue())
 
-    try:
-        text = read_file(path, ext)
-        #read_file returns all the text as a string 
-    except Exception as e:
-        st.error(f"Could not read file: {e}")
-        return
-    finally:
-        if os.path.exists(path):
-            os.remove(path)
+    with st.spinner(f"Reading {name}…"):
+        try:
+            text = read_file(path, ext)
+        except Exception as e:
+            st.error(f"Could not read file: {e}")
+            return
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
 
-    if not text:
-        st.error("No readable text found in that file.")
-        return
+        if not text:
+            st.error("No readable text found in that file.")
+            return
 
-    st.session_state.documents[did] = {
-        "filename": name, "text": text, "chunks": chunk(text),
-        "last_summary": None, "current_quiz": None,
-        "last_quiz_results": None, "qna_history": [],
-        "socratic_history": [], "flashcards": {},
-        "concept_graph_svg": None, "quiz_history": [],
-    }
-    st.session_state.doc_id = did
-    st.session_state.page = "summarizer"
-    st.session_state.quiz_taking= False
-    st.session_state.quiz_answers = {}
-    st.success(f"Uploaded {name}")
+        st.session_state.documents[did] = {
+            "filename": name, "text": text, "chunks": chunk(text),
+            "last_summary": None, "current_quiz": None,
+            "last_quiz_results": None, "qna_history": [],
+            "socratic_history": [], "flashcards": {},
+            "concept_graph_svg": None, "quiz_history": [],
+        }
+        st.session_state.doc_id       = did
+        st.session_state.page         = "summarizer"
+        st.session_state.quiz_taking  = False
+        st.session_state.quiz_answers = {}
+
+    st.success(f"✓ Uploaded {name}")
     st.rerun()
-
 
 def render_sidebar():
     with st.sidebar:
@@ -128,8 +129,8 @@ def main():
     elif page == "flashcards": page_flashcards(doc, doc_id)
     elif page == "qna":        page_qna(doc, doc_id)
     elif page == "socratic":   page_socratic(doc, doc_id)
-    else:
-        st.info(f"'{page}' page coming in a future step.")
-
+    elif page == "graph":      page_graph(doc, doc_id)
+    elif page == "analytics":  page_analytics(doc, doc_id)
+    
 if __name__ == "__main__":
     main()

@@ -16,6 +16,9 @@ import logging
 logger = logging.getLogger("study_buddy")
 logging.basicConfig(level=logging.INFO)
 
+import math
+import networkx as nx
+
 load_dotenv()
 
 # Constants
@@ -267,3 +270,130 @@ SOCRATIC_SYSTEM = (
     "You are a Socratic tutor. Ask guiding questions only- never give direct answers. "
     "One question at a time. Use this context:\n\n{context}"
 )
+
+GRAPH_PROMPT = ChatPromptTemplate.from_messages([
+    ("human",
+     "Extract 8-12 key concepts and their prerequisite relationships.\n\n"
+     "Return ONLY valid JSON:\n"
+     '{{"concepts":[{{"name":"...","description":"one sentence"}}],'
+     '"edges":[{{"from":"prereq","to":"dependent","relation":"required for"}}]}}\n\n'
+     "MATERIAL:\n{text}")
+])
+
+def svg_bar_chart(topics, accuracies, colors, W=740, H=280):
+    if not topics:
+        return '<p style="color:#756f5e;text-align:center;padding:40px">Complete a quiz to see topic accuracy.</p>'
+    ml, mr, mt, mb = 48, 20, 24, 88
+    cw  = W - ml - mr
+    ch  = H - mt - mb
+    n   = len(topics)
+    bw  = cw / n * 0.6
+    gap = cw / n
+    p = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">']
+    p.append(f'<rect width="{W}" height="{H}" fill="#ffffff"/>')
+    for pct in [0, 25, 50, 75, 100]:
+        y = mt + ch - pct / 100 * ch
+        p.append(f'<line x1="{ml}" y1="{y:.1f}" x2="{W-mr}" y2="{y:.1f}" stroke="#e7e1d3" stroke-width="0.5"/>')
+        p.append(f'<text x="{ml-5}" y="{y:.1f}" text-anchor="end" dominant-baseline="middle" font-size="10" font-family="Inter,sans-serif" fill="#756f5e">{pct}%</text>')
+    for i, (t, a, c) in enumerate(zip(topics, accuracies, colors)):
+        bx = ml + i * gap + (gap - bw) / 2
+        bh = a / 100 * ch
+        by = mt + ch - bh
+        p.append(f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bw:.1f}" height="{bh:.1f}" fill="{c}" rx="3"/>')
+        p.append(f'<text x="{bx+bw/2:.1f}" y="{by-5:.1f}" text-anchor="middle" font-size="10" font-family="Inter,sans-serif" fill="#323a52">{a}%</text>')
+        tx, ty = bx + bw / 2, mt + ch + 10
+        label  = t[:13] + ("…" if len(t) > 13 else "")
+        p.append(f'<text x="{tx:.1f}" y="{ty:.1f}" text-anchor="end" font-size="9" font-family="Inter,sans-serif" fill="#756f5e" transform="rotate(-35,{tx:.1f},{ty:.1f})">{label}</text>')
+    p.append(f'<line x1="{ml}" y1="{mt}" x2="{ml}" y2="{mt+ch}" stroke="#e7e1d3" stroke-width="1"/>')
+    p.append(f'<line x1="{ml}" y1="{mt+ch}" x2="{W-mr}" y2="{mt+ch}" stroke="#e7e1d3" stroke-width="1"/>')
+    p.append('</svg>')
+    return '\n'.join(p)
+
+
+def svg_line_chart(fc_series, W=740, H=240):
+    if not fc_series:
+        return '<p style="color:#756f5e;text-align:center;padding:40px">Review flashcards to see interval growth.</p>'
+    ml, mr, mt, mb = 45, 110, 20, 36
+    cw     = W - ml - mr
+    ch     = H - mt - mb
+    all_iv = [iv for s in fc_series for iv in s["intervals"]]
+    max_iv = max(all_iv, default=1) or 1
+    max_x  = max((len(s["intervals"]) for s in fc_series), default=1)
+    COLS   = ["#d9a441","#3f7d6e","#4a7fa5","#c1572a","#6a5acd","#2e8b57","#dc143c","#ff8c00"]
+    p = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">']
+    p.append(f'<rect width="{W}" height="{H}" fill="#ffffff"/>')
+    for pct in [0, 25, 50, 75, 100]:
+        val = pct / 100 * max_iv
+        y   = mt + ch - (val / max_iv * ch)
+        p.append(f'<line x1="{ml}" y1="{y:.1f}" x2="{W-mr}" y2="{y:.1f}" stroke="#e7e1d3" stroke-width="0.5"/>')
+        p.append(f'<text x="{ml-4}" y="{y:.1f}" text-anchor="end" dominant-baseline="middle" font-size="9" font-family="Inter,sans-serif" fill="#756f5e">{round(val)}d</text>')
+    for i, s in enumerate(fc_series[:8]):
+        col = COLS[i % len(COLS)]
+        ivs = s["intervals"]
+        if not ivs:
+            continue
+        pts = [(ml + (j / max(max_x - 1, 1)) * cw, mt + ch - (iv / max_iv * ch)) for j, iv in enumerate(ivs)]
+        if len(pts) > 1:
+            d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+            p.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="2"/>')
+        for x, y in pts:
+            p.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{col}"/>')
+        lx, ly = W - mr + 8, mt + i * 18
+        label  = s["topic"][:11] + ("…" if len(s["topic"]) > 11 else "")
+        p.append(f'<rect x="{lx}" y="{ly-5}" width="10" height="10" fill="{col}" rx="2"/>')
+        p.append(f'<text x="{lx+14}" y="{ly:.1f}" dominant-baseline="middle" font-size="9" font-family="Inter,sans-serif" fill="#756f5e">{label}</text>')
+    p.append(f'<line x1="{ml}" y1="{mt}" x2="{ml}" y2="{mt+ch}" stroke="#e7e1d3" stroke-width="1"/>')
+    p.append(f'<line x1="{ml}" y1="{mt+ch}" x2="{W-mr}" y2="{mt+ch}" stroke="#e7e1d3" stroke-width="1"/>')
+    p.append('</svg>')
+    return '\n'.join(p)
+
+
+def svg_concept_graph(nodes, edges_data, W=1000, H=600):
+    if not nodes:
+        return '<p style="color:#756f5e;text-align:center;padding:40px">No concepts extracted.</p>'
+    G = nx.DiGraph()
+    for n in nodes:
+        G.add_node(n["id"] if "id" in n else n["name"])
+    for n in nodes:
+        if "id" not in n:
+            n["id"] = n.get("name", "?")
+    valid = [(e["from"], e["to"], e.get("relation", "")) for e in edges_data
+             if e.get("from") in G.nodes and e.get("to") in G.nodes]
+    G.add_edges_from([(u, v) for u, v, _ in valid])
+    pos  = nx.spring_layout(G, seed=42, k=2.5 / math.sqrt(max(len(G.nodes), 1)))
+    cent = nx.betweenness_centrality(G)
+    mx   = max(cent.values(), default=0.001) or 0.001
+    PAD  = 120
+
+    def xy(p):
+        return (round(PAD + (p[0] + 1) / 2 * (W - 2 * PAD), 1),
+                round(PAD + (p[1] + 1) / 2 * (H - 2 * PAD), 1))
+
+    coords = {n: xy(pos[n]) for n in G.nodes}
+    p = [
+        f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width:100%;height:{H}px;border:1px solid #e7e1d3;border-radius:10px;background:#fff;overflow:visible">',
+        '<defs><marker id="arr" viewBox="0 -5 10 10" refX="20" refY="0" markerWidth="6" markerHeight="6" orient="auto">',
+        '<path d="M0,-5L10,0L0,5" fill="#a8a08c"/></marker></defs>',
+    ]
+    for u, v, _ in valid:
+        x1, y1 = coords[u]
+        x2, y2 = coords[v]
+        p.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#c8c0b0" stroke-width="1.5" marker-end="url(#arr)"/>')
+    for n in nodes:
+        nid = n["id"]
+        if nid not in coords:
+            continue
+        x, y = coords[nid]
+        c    = cent.get(nid, 0)
+        r    = round(18 + (c / mx) * 20, 1)
+        fill = "#d9a441" if c > mx * 0.5 else "#1f2433"
+        lbl  = nid
+        desc = n.get("description", "").replace("<", "&lt;").replace(">", "&gt;")
+        p.append(f'<g><title>{nid}: {desc}</title>')
+        p.append(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{fill}" stroke="white" stroke-width="2"/>')
+        p.append(f'<text x="{x}" y="{y + r + 12}" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" font-weight="600" fill="#1f2433">{lbl}</text>')
+        p.append('</g>')
+    p.append('</svg>')
+    p.append('<p style="font-size:12px;color:#756f5e;margin-top:8px">Gold nodes = highest centrality · Arrow = prerequisite · Hover node for description</p>')
+    return '\n'.join(p)
