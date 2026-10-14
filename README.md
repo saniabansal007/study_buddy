@@ -1,32 +1,32 @@
 # Study Buddy
 
-Study Buddy turns any PDF, PPTX, or TXT file into summaries, quizzes, flashcards, a RAG-powered Q&A chat, a Socratic tutor, a concept dependency graph, and learning analytics. 
-Everything runs through your own Hugging Face token. Your notes never leave your machine.
+  Study Buddy turns any `PDF`, `PPTX`, or `TXT` file into summaries, quizzes, flashcards, a **RAG**-powered Q&A chat, Socratic tutor, a concept dependency graph, and learning analytics. 
+  Everything runs through your own `Hugging Face` token. Your notes never leave your machine.
 
 ---
 
 ## Features
 
-### Notes Summarizer
-Generate short, medium, or detailed summaries of your uploaded notes instantly.
+- Notes Summarizer \
+  Generate short, medium, or detailed summaries of your uploaded notes instantly.
 
-### Quiz Generator
-Create mcq's at easy, medium, or hard difficulty. Pick how many questions, take the quiz interactively, and get instant results.
+- Quiz Generator \
+  Create mcq's at easy, medium, or hard difficulty. Pick how many questions, take the quiz interactively, and get instant results.
 
-### Q&A Chat
-Ask questions from your notes. Powered by RAG (Retrieval-Augmented Generation): it gives answers based on the actual content of your document, no hallucination. 
+- Q&A Chat \
+  Ask questions from your notes. Powered by RAG (Retrieval-Augmented Generation): it gives answers based on the actual content of your document, no hallucination. 
 
-### Socratic Tutor
-The tutor doesn't give answers, instead it asks you questions from your notes. 
+- Socratic Tutor \
+  The tutor doesn't give answers, instead it asks you questions from your notes. 
 
-### Flashcards with SM-2
-Generate flashcards and review them with the SM-2 spaced repetition algorithm. Cards you struggle with come back sooner. Easy cards are pushed further out. Intervals grow automatically with each correct review.
+- Flashcards with SM-2 \
+  Generate flashcards and review them with the SM-2 spaced repetition algorithm. Cards you struggle with come back sooner. Easy cards are pushed further out. Intervals grow automatically with each correct review.
 
-### Concept Dependency Graph
-Extract 8-12 key concepts from your notes and render them as an interactive graph showing their relationships. Foundational concepts are highlighted in gold.
+- Concept Dependency Graph \
+  Extract 8-12 key concepts from your notes and render them as an interactive graph showing their relationships. Foundational concepts are highlighted in gold.
 
-### Learning Analytics
-Track exam readiness, quiz accuracy by topic, weak topics (under 60%), and flashcard interval growth rendered as SVG charts.
+- Learning Analytics \
+  Track exam readiness, quiz accuracy by topic, weak topics (under 60%), and flashcard interval growth rendered as SVG charts.
 
 ---
 
@@ -74,8 +74,8 @@ study_buddy/
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/yourname/study-buddy.git
-cd study-buddy
+git clone https://github.com/saniabansal007/study_buddy.git
+cd study_buddy
 ```
 
 ### 2. Create a virtual environment
@@ -99,7 +99,7 @@ Create a `.env` file in the project root:
 ```
 HF_TOKEN=hf_your_token_here
 ```
-Get your token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). The model used is `Qwen/Qwen2.5-7B-Instruct` : make sure Inference API access is enabled on your account.
+Get your token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). The model used is `Qwen/Qwen2.5-7B-Instruct` : make sure **Inference API** access is enabled on your account.
 
 ### 5. Run
 ```bash
@@ -108,5 +108,3 @@ streamlit run app.py
 Opens at `http://localhost:8501`
 
 ---
-
-<p>Built with LangChain, Streamlit, Hugging Face, Chroma</p>
